@@ -144,7 +144,7 @@ def impute_missing_counterfactuals(augmented_data, n_arms):
 
 
 
-def generate_budget_limited_counterfactuals(env, dataset, annotation_budget):
+def generate_budget_limited_counterfactuals(env, dataset, annotation_budget, seed=None):
     """
     Generate counterfactual rewards with a fixed annotation budget
     
@@ -152,10 +152,13 @@ def generate_budget_limited_counterfactuals(env, dataset, annotation_budget):
         env (FiveArmedBandit): The bandit environment
         dataset: List of (action, reward) from original data collection
         annotation_budget: Total number of counterfactual annotations to generate
+        seed (int): Random seed for reproducibility
         
     Returns:
         list: Original data augmented with budget-limited counterfactual rewards
     """
+    if seed is not None:
+        np.random.seed(seed)
     augmented_data = []
     n_samples = len(dataset)
     
@@ -170,7 +173,7 @@ def generate_budget_limited_counterfactuals(env, dataset, annotation_budget):
             'counterfactuals': counterfactual_rewards
         })
     
-   
+    # Create list of all possible (sample_idx, action) pairs for annotation
     possible_annotations = []
     for sample_idx in range(n_samples):
         sample_action = dataset[sample_idx][0]
@@ -178,9 +181,20 @@ def generate_budget_limited_counterfactuals(env, dataset, annotation_budget):
             if arm != sample_action:  
                 possible_annotations.append((sample_idx, arm))
     
-
-    np.random.shuffle(possible_annotations)
-    selected_annotations = possible_annotations[:annotation_budget]
+    total_possible = len(possible_annotations)
+    
+    if annotation_budget >= total_possible:
+        # If budget covers all possible annotations, annotate everything
+        selected_annotations = possible_annotations
+    else:
+        # Randomly select which to annotate using np.random.choice without replacement
+        # This is more systematic than shuffling
+        selected_indices = np.random.choice(
+            total_possible, 
+            size=min(annotation_budget, total_possible), 
+            replace=False
+        )
+        selected_annotations = [possible_annotations[idx] for idx in selected_indices]
     
 
     for sample_idx, arm in selected_annotations:
@@ -191,21 +205,20 @@ def generate_budget_limited_counterfactuals(env, dataset, annotation_budget):
 
 def estimate_full_cis(augmented_data, behavior_policy, eval_policy):
     """
-    Compute C*-IS estimate (equal weights) using fully augmented dataset.
+    Compute C*-IS estimate using fully augmented dataset.
+    
+    With full counterfactual coverage, C*-IS directly computes the evaluation-policy-weighted
+    average of factual and counterfactual rewards without importance ratios:
+    v̂_C*-IS = π_e(a|s)·r + Σ_{ã∈A\{a}} π_e(ã|s)·g_ã
     
     Args:
         augmented_data (list): Output from generate_full_counterfactuals
-        behavior_policy (list): Original behavior policy probabilities
+        behavior_policy (list): Original behavior policy probabilities (unused in C*-IS)
         eval_policy (list): Evaluation policy probabilities
     
     Returns:
         float: Estimated policy value using C*-IS
     """
-    n_arms = len(behavior_policy)
-    weight = 1.0 / n_arms
-    
-    augmented_behavior = [1.0/n_arms] * n_arms
-    
     estimate = 0
     n_samples = len(augmented_data)
     
@@ -214,20 +227,88 @@ def estimate_full_cis(augmented_data, behavior_policy, eval_policy):
         factual_reward = row['reward']
         counterfactuals = row['counterfactuals']
         
-    
-        rho_a = eval_policy[factual_action] / augmented_behavior[factual_action]
-        estimate += weight * rho_a * factual_reward
+        # Direct policy-weighted average: no importance ratios needed
+        estimate += eval_policy[factual_action] * factual_reward
         
-        
-        for a in range(n_arms):
+        for a in range(len(eval_policy)):
             if a != factual_action:
-                rho = eval_policy[a] / augmented_behavior[a]
-                estimate += weight * rho * counterfactuals[a]
+                estimate += eval_policy[a] * counterfactuals[a]
     
     return estimate / n_samples
 
 
 def estimate_budget_limited_cis(augmented_data, behavior_policy, eval_policy):
+    """
+    Compute C-IS estimate with budget-limited annotations.
+    This version correctly reweights each sample based on
+    which arms are available (factual + any annotated).
+
+    Args:
+        augmented_data (list): Output from generate_budget_limited_counterfactuals
+        behavior_policy (list): Original behavior policy probabilities
+        eval_policy (list): Evaluation policy probabilities
+        impute (bool): Whether to impute missing annotations (default: True)
+
+    Returns:
+        float: Estimated policy value using budget-limited C-IS
+    """
+    n_arms = len(behavior_policy)
+    n_samples = len(augmented_data)
+    
+   
+    augmented_data = impute_missing_counterfactuals(augmented_data, n_arms)
+    
+    estimate = 0.0
+    weights = [[] for _ in range(n_arms)]
+
+    for i, row in enumerate(augmented_data):
+        factual_action = row['action']
+        counterfactuals = row['counterfactuals']
+        available_arms = [factual_action] + [a for a in range(n_arms) if counterfactuals[a] is not None]
+
+        w = np.zeros(n_arms)
+        w[available_arms] = 1
+        w = w / len(available_arms)
+        weights[factual_action].append(w)
+
+    w_bar = np.zeros((n_arms, n_arms))
+    for factual_action in range(n_arms):
+        w_a = np.asarray(weights[factual_action])
+        w_a_bar = w_a.mean(axis=0)
+        w_bar[factual_action] = w_a_bar
+
+    pi_b_plus = np.zeros(n_arms)
+    for a in range(n_arms):
+        pi_b_plus[a] = np.sum([w_bar[factual_action][a] * behavior_policy[factual_action] 
+                               for factual_action in range(n_arms)])
+    
+    estimate = 0.0
+    for row in augmented_data:
+        factual_action = row['action']
+        reward = row['reward']
+        counterfactuals = row['counterfactuals']
+        
+        w = w_bar[factual_action]
+        
+        sample_estimate = 0.0     
+
+        if pi_b_plus[factual_action] > 0:
+            rho_a = eval_policy[factual_action] / pi_b_plus[factual_action]
+            sample_estimate += w[factual_action] * rho_a * reward
+        
+        for a_hat in range(n_arms):
+            if a_hat != factual_action and counterfactuals[a_hat] is not None:
+                if pi_b_plus[a_hat] > 0: 
+                    rho_a_hat = eval_policy[a_hat] / pi_b_plus[a_hat]
+                    sample_estimate += w[a_hat] * rho_a_hat * counterfactuals[a_hat]
+        
+        estimate += sample_estimate
+    
+    return estimate / n_samples
+
+
+#worked on with Dr.Tang
+def estimate_budget_limited_cis2(augmented_data, behavior_policy, eval_policy):
     """
     Compute C-IS estimate with budget-limited annotations.
     This version correctly reweights each sample based on

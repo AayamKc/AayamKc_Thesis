@@ -293,10 +293,10 @@ if __name__ == "__main__":
     
     results, true_values = evaluate_active_approaches(
         env, policies, policy_names,
-        n_datasets=50,  # Reduced for faster execution
+        n_datasets=50,
         samples_per_dataset=1000,
         annotation_budgets=[0, 500, 1000, 1500, 2000, 3000],
-        batch_sizes=[None],  # Test single batch first
+        batch_sizes=[None],
         n_annotation_trials=10
     )
     
@@ -325,31 +325,26 @@ if __name__ == "__main__":
         budget = 2000
         batch_str = "single"
         
-        # Uniform random
         key = f"uniform_random_budget_{budget}"
         mean_est = results[key][policy_name]["mean"]
         rmse = results[key][policy_name]["rmse"]
         print(f"{'Uniform Random':40s}: Mean={mean_est:.3f}, RMSE={rmse:.3f}")
         
-        # Divergence prioritized
         key = f"divergence_prioritized_budget_{budget}_batch_{batch_str}"
         mean_est = results[key][policy_name]["mean"]
         rmse = results[key][policy_name]["rmse"]
         print(f"{'Divergence Prioritized':40s}: Mean={mean_est:.3f}, RMSE={rmse:.3f}")
         
-        # Variance prioritized (factual)
         key = f"variance_prioritized_factual_init_budget_{budget}_batch_{batch_str}"
         mean_est = results[key][policy_name]["mean"]
         rmse = results[key][policy_name]["rmse"]
         print(f"{'Variance Prioritized (Factual)':40s}: Mean={mean_est:.3f}, RMSE={rmse:.3f}")
         
-        # Variance prioritized (uniform)
         key = f"variance_prioritized_uniform_init_budget_{budget}_batch_{batch_str}"
         mean_est = results[key][policy_name]["mean"]
         rmse = results[key][policy_name]["rmse"]
         print(f"{'Variance Prioritized (10% Uniform)':40s}: Mean={mean_est:.3f}, RMSE={rmse:.3f}")
         
-        # Hybrid
         key = f"hybrid_divergence_variance_budget_{budget}_batch_{batch_str}"
         mean_est = results[key][policy_name]["mean"]
         rmse = results[key][policy_name]["rmse"]

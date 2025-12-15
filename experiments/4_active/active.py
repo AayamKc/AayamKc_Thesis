@@ -195,10 +195,8 @@ def generate_variance_prioritized_counterfactuals_factual_init(dataset, env, bud
     remaining_budget = budget
     
     while remaining_budget > 0:
-        # Estimate variance from current data
         variance_estimates = _estimate_variance_from_data(current_data, env, env.n_states, env.n_arms)
         
-        # Score all remaining candidates
         annotation_candidates = []
         for i, data_point in enumerate(dataset):
             state = data_point['state']
@@ -271,10 +269,8 @@ def generate_variance_prioritized_counterfactuals_uniform_init(dataset, env, bud
         batch_size = remaining_budget
     
     while remaining_budget > 0:
-        # Estimate variance from current data
         variance_estimates = _estimate_variance_from_data(current_data, env, env.n_states, env.n_arms)
         
-        # Score all remaining candidates
         annotation_candidates = []
         for i, data_point in enumerate(dataset):
             state = data_point['state']
@@ -340,7 +336,6 @@ def generate_hybrid_divergence_variance_counterfactuals(dataset, env, eval_polic
         factual_action = data_point['action']
         for action in range(env.n_arms):
             if action != factual_action:
-                # Divergence score: |pi_e(a|s) - pi_b(a|s)|
                 priority = abs(eval_policy[state][action] - behavior_policy[state][action])
                 random_tiebreaker = np.random.random()
                 stage1_candidates.append((i, action, priority, random_tiebreaker))

@@ -429,7 +429,7 @@ def save_rmse_to_csv(results, policy_names, annotation_budgets, filename="rmse_r
     """
     import csv
     
-    filepath = os.path.join(OUTPUTS_DIR, filename)
+    filepath = os.path.join(IMAGES_DIR, filename)
     print(f"\n=== Saving RMSE values to {filepath} ===")
     
     with open(filepath, 'w', newline='') as csvfile:
@@ -481,7 +481,7 @@ def run_evaluation():
     """
     print("Starting budget-limited annotation evaluation...")
     print(f"Images will be saved to: {os.path.abspath(IMAGES_DIR)}")
-    print(f"CSV files will be saved to: {os.path.abspath(OUTPUTS_DIR)}\n")
+    print(f"CSV files will be saved to: {os.path.abspath(IMAGES_DIR)}\n")
     
     env = FiveArmedBandit(seed=42)
     
@@ -527,7 +527,7 @@ def run_evaluation():
     print(f"    - rmse_vs_budget.png")
     print(f"    - std_vs_budget.png")
     print(f"    - expected_value_rmse_vs_budget.png")
-    print(f"  Data: {os.path.abspath(OUTPUTS_DIR)}/")
+    print(f"  Data: {os.path.abspath(IMAGES_DIR)}/")
     print(f"    - rmse_by_budget.csv")
     print("="*80)
 

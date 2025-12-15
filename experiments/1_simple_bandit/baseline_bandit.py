@@ -209,7 +209,7 @@ def estimate_full_cis(augmented_data, behavior_policy, eval_policy):
     
     With full counterfactual coverage, C*-IS directly computes the evaluation-policy-weighted
     average of factual and counterfactual rewards without importance ratios:
-    v̂_C*-IS = π_e(a|s)·r + Σ_{ã∈A\{a}} π_e(ã|s)·g_ã
+    v̂_C*-IS = π_e(a|s)·r + Σ_{ã∈A\\{a}} π_e(ã|s)·g_ã
     
     Args:
         augmented_data (list): Output from generate_full_counterfactuals
